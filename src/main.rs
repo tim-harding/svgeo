@@ -1,7 +1,7 @@
 use std::io::{stdin, Read};
 use usvg::{tiny_skia_path::PathSegment, Node, Options, Tree};
 
-mod json;
+//mod json;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
 struct Point(f32, f32, f32);
@@ -28,9 +28,11 @@ fn main() -> anyhow::Result<()> {
                     group_stack.push((group, id))
                 }
                 Node::Path(path) => {
+                    let cid = path.id();
+                    let id = if cid == "" { id } else { cid };
                     if path.is_visible() {
                         prims.push(Primitive {
-                            id: path.id().to_string(),
+                            id: id.to_string(),
                             segments: path.data().segments().collect(),
                         })
                     }
@@ -39,6 +41,6 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-    println!("{:?}", prims);
+    println!("{:#?}", prims);
     Ok(())
 }
