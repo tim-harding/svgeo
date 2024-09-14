@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-struct Point(f32, f32, f32);
-
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum Value {
     String(String),
