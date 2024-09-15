@@ -5,7 +5,7 @@ use std::{
 };
 use usvg::{
     tiny_skia_path::{PathSegment, Point},
-    Node, Options, Tree,
+    Group, Node, Options, Transform, Tree,
 };
 
 mod json;
@@ -16,21 +16,40 @@ struct SvgPath {
     segments: Vec<PathSegment>,
 }
 
+struct GroupInfo<'a> {
+    id: &'a str,
+    group: &'a Group,
+    parent_transform: Transform,
+}
+
 fn main() -> anyhow::Result<()> {
     let mut input = vec![];
     stdin().read_to_end(&mut input)?;
     let svg = Tree::from_data(input.as_slice(), &Options::default())?;
-    let mut group_stack = vec![(svg.root(), "")];
+    let mut group_stack = vec![GroupInfo {
+        id: "",
+        parent_transform: Transform::identity(),
+        group: svg.root(),
+    }];
     let mut paths = vec![];
 
     while let Some(top) = group_stack.pop() {
-        let (group, id) = top;
+        let GroupInfo {
+            id,
+            parent_transform,
+            group,
+        } = top;
+        let transform = parent_transform.pre_concat(group.transform());
         for child in group.children() {
             match child {
                 Node::Group(group) => {
                     let cid = group.id();
                     let id = if cid.is_empty() { id } else { cid };
-                    group_stack.push((group, id))
+                    group_stack.push(GroupInfo {
+                        id,
+                        group,
+                        parent_transform: transform,
+                    })
                 }
                 Node::Path(path) => {
                     let cid = path.id();
@@ -38,25 +57,22 @@ fn main() -> anyhow::Result<()> {
                     if !path.is_visible() {
                         continue;
                     }
+                    let Some(path_tx) = path.data().clone().transform(transform) else {
+                        continue;
+                    };
                     if path.fill().is_some() {
                         paths.push(SvgPath {
                             id: id.to_string(),
-                            segments: path.data().segments().collect(),
+                            segments: path_tx.segments().collect(),
                         });
                     }
                     if let Some(stroke) = path.stroke() {
-                        if let Some(path_stroke) = path.data().stroke(&stroke.to_tiny_skia(), 1.0) {
+                        if let Some(path_stroke) = path_tx.stroke(&stroke.to_tiny_skia(), 1.0) {
                             paths.push(SvgPath {
                                 id: id.to_string(),
                                 segments: path_stroke.segments().collect(),
                             })
                         }
-                    }
-                    if path.is_visible() {
-                        paths.push(SvgPath {
-                            id: id.to_string(),
-                            segments: path.data().segments().collect(),
-                        })
                     }
                 }
                 Node::Image(_) | Node::Text(_) => {}
