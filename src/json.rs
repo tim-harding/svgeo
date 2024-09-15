@@ -12,8 +12,8 @@ pub enum Value {
 impl Value {
     pub fn to_string(self) -> String {
         match self {
-            Value::String(s) => s,
-            Value::Str(s) => s.to_string(),
+            Value::String(s) => format!("\"{s}\""),
+            Value::Str(s) => format!("\"{s}\""),
             Value::Integer(i) => format!("{i}"),
             Value::Float(f) => format!("{f}"),
             Value::Boolean(b) => format!("{b}"),
@@ -27,7 +27,7 @@ impl Value {
                     o.0.into_iter()
                         .map(|(k, v)| {
                             let v = v.to_string();
-                            format!("{k}:{v}")
+                            format!("\"{k}\":{v}")
                         })
                         .collect();
                 let s = a.join(",");
