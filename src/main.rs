@@ -300,10 +300,10 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
                             "type",
                             "Bezier",
                             "order",
-                            4,
+                            order,
                             "knots",
                             ValueVec(
-                                (0..prim.points.len() / (order - 1))
+                                (0..prim.points.len() / (order - 1) + 1)
                                     .map(Value::from)
                                     .collect()
                             )
