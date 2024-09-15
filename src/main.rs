@@ -2,7 +2,6 @@ use json::{Value, ValueVec};
 use std::{
     io::{stdin, Read},
     ops::{Add, Div, Mul, Sub},
-    primitive,
 };
 use usvg::{
     tiny_skia_path::{PathSegment, Point},
@@ -247,7 +246,7 @@ struct Prim {
     points: Vec<P>,
 }
 
-pub fn prims_to_json(prims: Vec<Prim>) -> Value {
+fn prims_to_json(prims: Vec<Prim>) -> Value {
     let point_count = prims.iter().fold(0, |acc, prim| acc + prim.points.len());
     let indices = ValueVec((0..point_count as i64).map(|i| i.into()).collect());
 

@@ -19,8 +19,8 @@ impl Value {
             Value::Boolean(b) => format!("{b}"),
             Value::Array(a) => {
                 let a: Vec<_> = a.0.into_iter().map(|a| a.to_string()).collect();
-                let s = a.join(",");
-                format!("[{s}]")
+                let s = a.join(",\n");
+                format!("[\n{s}\n]")
             }
             Value::Object(o) => {
                 let a: Vec<_> =
@@ -30,8 +30,8 @@ impl Value {
                             format!("\"{k}\":{v}")
                         })
                         .collect();
-                let s = a.join(",");
-                format!("{{{s}}}")
+                let s = a.join(",\n");
+                format!("{{\n{s}\n}}")
             }
         }
     }
@@ -108,7 +108,6 @@ macro_rules! value_vec {
         }
     };
 }
-pub use value_vec;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ValueObj(pub Vec<(&'static str, Value)>);
@@ -136,7 +135,6 @@ macro_rules! value_obj {
         }
     };
 }
-pub use value_obj;
 
 impl From<Vec<(&'static str, Value)>> for ValueObj {
     fn from(value: Vec<(&'static str, Value)>) -> Self {
