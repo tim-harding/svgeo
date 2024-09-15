@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 enum Value {
     String(String),
     Str(&'static str),
@@ -29,7 +29,7 @@ value_from!(bool, Boolean);
 value_from!(ValueVec, Array);
 value_from!(ValueObj, Object);
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct ValueVec(Vec<Value>);
 
 impl ValueVec {
@@ -87,6 +87,8 @@ fn structure() -> Value {
         52,
         "primitivecount",
         2,
+        "info",
+        value_obj!()
     ]
     .into()
 }
