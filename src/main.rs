@@ -270,7 +270,7 @@ impl PrimBuilder {
                 }
             }
         }
-        if self.is_closed {
+        if self.is_closed && self.order != Order::Line {
             points.pop();
         }
         Prim {
@@ -323,19 +323,7 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
             prim.color.into_iter().map(Value::from).collect(),
         )));
         let value = Value::from(match prim.order {
-            Order::Line => value_vec![
-                value_vec!["type", "PolygonCurve_run"],
-                value_vec![
-                    "startvertex",
-                    prim_i,
-                    "nprimitives",
-                    1,
-                    "nvertices",
-                    value_vec![prim.points.len()]
-                ]
-            ],
-
-            Order::Cube | Order::Quad => {
+            Order::Line | Order::Cube | Order::Quad => {
                 let order = match prim.order {
                     Order::Line => 2,
                     Order::Quad => 3,
