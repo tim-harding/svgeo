@@ -5,14 +5,15 @@ use std::{
 };
 use usvg::{
     tiny_skia_path::{PathSegment, Point},
-    Group, Node, Options, Transform, Tree,
+    Color, Group, Node, Options, Transform, Tree,
 };
 
 mod json;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 struct SvgPath {
     id: String,
+    color: Color,
     segments: Vec<PathSegment>,
 }
 
@@ -64,17 +65,31 @@ fn main() -> anyhow::Result<()> {
                         continue;
                     };
 
-                    if path.fill().is_some() {
+                    if let Some(fill) = path.fill() {
+                        let color = match fill.paint() {
+                            usvg::Paint::Color(color) => *color,
+                            usvg::Paint::LinearGradient(_)
+                            | usvg::Paint::RadialGradient(_)
+                            | usvg::Paint::Pattern(_) => Color::black(),
+                        };
                         paths.push(SvgPath {
                             id: id.clone(),
+                            color,
                             segments: path_tx.segments().collect(),
                         });
                     }
 
                     if let Some(stroke) = path.stroke() {
+                        let color = match stroke.paint() {
+                            usvg::Paint::Color(color) => *color,
+                            usvg::Paint::LinearGradient(_)
+                            | usvg::Paint::RadialGradient(_)
+                            | usvg::Paint::Pattern(_) => Color::black(),
+                        };
                         if let Some(path_stroke) = path_tx.stroke(&stroke.to_tiny_skia(), 1.0) {
                             paths.push(SvgPath {
                                 id,
+                                color,
                                 segments: path_stroke.segments().collect(),
                             })
                         }
@@ -88,13 +103,17 @@ fn main() -> anyhow::Result<()> {
 
     let mut prims = vec![];
     for path in paths {
-        let SvgPath { id, segments } = path;
+        let SvgPath {
+            id,
+            color,
+            segments,
+        } = path;
         let mut prim: Option<PrimBuilder> = None;
         for segment in segments.into_iter() {
             match segment {
                 PathSegment::MoveTo(p0) => {
                     if let Some(prim) = prim {
-                        prims.push(prim.build(id.clone()));
+                        prims.push(prim.build(id.clone(), color));
                     }
                     prim = Some(PrimBuilder::new(p0.into()));
                 }
@@ -119,7 +138,7 @@ fn main() -> anyhow::Result<()> {
                 PathSegment::Close => {
                     if let Some(mut prim) = prim.take() {
                         prim.is_closed = true;
-                        prims.push(prim.build(id.clone()));
+                        prims.push(prim.build(id.clone(), color));
                     }
                 }
             }
@@ -229,7 +248,7 @@ impl PrimBuilder {
         }
     }
 
-    pub fn build(self, id: String) -> Prim {
+    pub fn build(self, id: String, color: Color) -> Prim {
         let mut points = vec![self.start];
         match self.order {
             Order::Line => {
@@ -256,6 +275,11 @@ impl PrimBuilder {
         }
         Prim {
             id,
+            color: [
+                color.red as f32 / 255.0,
+                color.blue as f32 / 255.0,
+                color.green as f32 / 255.0,
+            ],
             order: self.order,
             is_closed: self.is_closed,
             points,
@@ -266,6 +290,7 @@ impl PrimBuilder {
 #[derive(Debug, Clone, Default, PartialEq, PartialOrd)]
 struct Prim {
     id: String,
+    color: [f32; 3],
     order: Order,
     is_closed: bool,
     points: Vec<P>,
@@ -290,9 +315,13 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
     let mut prim_i = 0;
     let mut primitives = vec![];
     let mut prim_ids = vec![];
+    let mut prim_colors = vec![];
     let prim_id_indices = ValueVec((0..prims.len()).map(Value::from).collect());
     for prim in prims.iter() {
         prim_ids.push(Value::from(prim.id.clone()));
+        prim_colors.push(Value::from(ValueVec(
+            prim.color.into_iter().map(Value::from).collect(),
+        )));
         let value = Value::from(match prim.order {
             Order::Line => value_vec![
                 value_vec!["type", "PolygonCurve_run"],
@@ -345,6 +374,8 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
         prim_i += prim.points.len();
     }
 
+    eprintln!("{}", Value::from(ValueVec(prim_colors.clone())));
+
     value_vec![
         "fileversion",
         "20.5.332",
@@ -391,35 +422,78 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
                 ]
             ]],
             "primitiveattributes",
-            value_vec![value_vec![
+            value_vec![
                 value_vec![
-                    "scope",
-                    "public",
-                    "type",
-                    "string",
-                    "name",
-                    "name",
-                    "options",
-                    value_obj! {}
+                    value_vec![
+                        "scope",
+                        "public",
+                        "type",
+                        "numeric",
+                        "name",
+                        "Cd",
+                        "options",
+                        value_obj! {
+                            "type";value_obj!{
+                                "type";"string",
+                                "value";"color"
+                            }
+                        }
+                    ],
+                    value_vec![
+                        "size",
+                        3,
+                        "storage",
+                        "fpreal32",
+                        "defaults",
+                        value_vec![
+                            "size",
+                            3,
+                            "storage",
+                            "fpreal32",
+                            "values",
+                            value_vec![1, 1, 1]
+                        ],
+                        "values",
+                        value_vec![
+                            "size",
+                            3,
+                            "storage",
+                            "fpreal32",
+                            "tuples",
+                            ValueVec(prim_colors)
+                        ]
+                    ]
                 ],
                 value_vec![
-                    "size",
-                    1,
-                    "storage",
-                    "int32",
-                    "strings",
-                    ValueVec(prim_ids),
-                    "indices",
+                    value_vec![
+                        "scope",
+                        "public",
+                        "type",
+                        "string",
+                        "name",
+                        "id",
+                        "options",
+                        value_obj! {}
+                    ],
                     value_vec![
                         "size",
                         1,
                         "storage",
                         "int32",
-                        "arrays",
-                        value_vec![prim_id_indices]
+                        "strings",
+                        ValueVec(prim_ids),
+                        "indices",
+                        value_vec![
+                            "size",
+                            1,
+                            "storage",
+                            "int32",
+                            "arrays",
+                            value_vec![prim_id_indices]
+                        ]
                     ]
                 ]
-            ]]
+            ]
         ],
         "primitives",
         ValueVec(primitives)

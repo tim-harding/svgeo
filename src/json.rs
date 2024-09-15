@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     String(String),
@@ -9,29 +11,29 @@ pub enum Value {
     Object(ValueObj),
 }
 
-impl Value {
-    pub fn to_string(self) -> String {
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::String(s) => format!("\"{s}\""),
-            Value::Str(s) => format!("\"{s}\""),
-            Value::Integer(i) => format!("{i}"),
-            Value::Float(f) => format!("{f}"),
-            Value::Boolean(b) => format!("{b}"),
+            Value::String(s) => write!(f, "\"{s}\""),
+            Value::Str(s) => write!(f, "\"{s}\""),
+            Value::Integer(i) => write!(f, "{i}"),
+            Value::Float(n) => write!(f, "{n}"),
+            Value::Boolean(b) => write!(f, "{b}"),
             Value::Array(a) => {
-                let a: Vec<_> = a.0.into_iter().map(|a| a.to_string()).collect();
+                let a: Vec<_> = a.0.iter().map(|a| a.to_string()).collect();
                 let s = a.join(",\n");
-                format!("[\n{s}\n]")
+                write!(f, "[\n{s}\n]")
             }
             Value::Object(o) => {
                 let a: Vec<_> =
-                    o.0.into_iter()
+                    o.0.iter()
                         .map(|(k, v)| {
                             let v = v.to_string();
                             format!("\"{k}\":{v}")
                         })
                         .collect();
                 let s = a.join(",\n");
-                format!("{{\n{s}\n}}")
+                write!(f, "{{\n{s}\n}}")
             }
         }
     }
