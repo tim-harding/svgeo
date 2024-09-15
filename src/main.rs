@@ -374,8 +374,6 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
         prim_i += prim.points.len();
     }
 
-    eprintln!("{}", Value::from(ValueVec(prim_colors.clone())));
-
     value_vec![
         "fileversion",
         "20.5.332",
