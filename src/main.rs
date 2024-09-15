@@ -17,7 +17,7 @@ struct SvgPath {
 }
 
 struct GroupInfo<'a> {
-    id: &'a str,
+    id: String,
     group: &'a Group,
     parent_transform: Transform,
 }
@@ -27,7 +27,7 @@ fn main() -> anyhow::Result<()> {
     stdin().read_to_end(&mut input)?;
     let svg = Tree::from_data(input.as_slice(), &Options::default())?;
     let mut group_stack = vec![GroupInfo {
-        id: "",
+        id: "".to_string(),
         parent_transform: Transform::identity(),
         group: svg.root(),
     }];
@@ -41,40 +41,46 @@ fn main() -> anyhow::Result<()> {
         } = top;
         let transform = parent_transform.pre_concat(group.transform());
         for child in group.children() {
+            let cid = child.id();
+            let id = if cid.is_empty() {
+                id.clone()
+            } else {
+                format!("{id}/{cid}")
+            };
+
             match child {
-                Node::Group(group) => {
-                    let cid = group.id();
-                    let id = if cid.is_empty() { id } else { cid };
-                    group_stack.push(GroupInfo {
-                        id,
-                        group,
-                        parent_transform: transform,
-                    })
-                }
+                Node::Group(group) => group_stack.push(GroupInfo {
+                    id,
+                    group,
+                    parent_transform: transform,
+                }),
+
                 Node::Path(path) => {
-                    let cid = path.id();
-                    let id = if cid.is_empty() { id } else { cid };
                     if !path.is_visible() {
                         continue;
                     }
+
                     let Some(path_tx) = path.data().clone().transform(transform) else {
                         continue;
                     };
+
                     if path.fill().is_some() {
                         paths.push(SvgPath {
-                            id: id.to_string(),
+                            id: id.clone(),
                             segments: path_tx.segments().collect(),
                         });
                     }
+
                     if let Some(stroke) = path.stroke() {
                         if let Some(path_stroke) = path_tx.stroke(&stroke.to_tiny_skia(), 1.0) {
                             paths.push(SvgPath {
-                                id: id.to_string(),
+                                id,
                                 segments: path_stroke.segments().collect(),
                             })
                         }
                     }
                 }
+
                 Node::Image(_) | Node::Text(_) => {}
             }
         }
@@ -82,12 +88,13 @@ fn main() -> anyhow::Result<()> {
 
     let mut prims = vec![];
     for path in paths {
+        let SvgPath { id, segments } = path;
         let mut prim: Option<PrimBuilder> = None;
-        for segment in path.segments.into_iter() {
+        for segment in segments.into_iter() {
             match segment {
                 PathSegment::MoveTo(p0) => {
                     if let Some(prim) = prim {
-                        prims.push(prim.build());
+                        prims.push(prim.build(id.clone()));
                     }
                     prim = Some(PrimBuilder::new(p0.into()));
                 }
@@ -112,7 +119,7 @@ fn main() -> anyhow::Result<()> {
                 PathSegment::Close => {
                     if let Some(mut prim) = prim.take() {
                         prim.is_closed = true;
-                        prims.push(prim.build());
+                        prims.push(prim.build(id.clone()));
                     }
                 }
             }
@@ -222,7 +229,7 @@ impl PrimBuilder {
         }
     }
 
-    pub fn build(self) -> Prim {
+    pub fn build(self, id: String) -> Prim {
         let mut points = vec![self.start];
         match self.order {
             Order::Line => {
@@ -248,6 +255,7 @@ impl PrimBuilder {
             points.pop();
         }
         Prim {
+            id,
             order: self.order,
             is_closed: self.is_closed,
             points,
@@ -257,6 +265,7 @@ impl PrimBuilder {
 
 #[derive(Debug, Clone, Default, PartialEq, PartialOrd)]
 struct Prim {
+    id: String,
     order: Order,
     is_closed: bool,
     points: Vec<P>,
@@ -280,7 +289,10 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
 
     let mut prim_i = 0;
     let mut primitives = vec![];
+    let mut prim_ids = vec![];
+    let prim_id_indices = ValueVec((0..prims.len()).map(Value::from).collect());
     for prim in prims.iter() {
+        prim_ids.push(Value::from(prim.id.clone()));
         let value = Value::from(match prim.order {
             Order::Line => value_vec![
                 value_vec!["type", "PolygonCurve_run"],
@@ -332,7 +344,6 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
         primitives.push(value);
         prim_i += prim.points.len();
     }
-    let primitives = ValueVec(primitives);
 
     value_vec![
         "fileversion",
@@ -378,10 +389,40 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
                     "values",
                     value_vec!["size", 3, "storage", "fpreal32", "tuples", points]
                 ]
+            ]],
+            "primitiveattributes",
+            value_vec![value_vec![
+                value_vec![
+                    "scope",
+                    "public",
+                    "type",
+                    "string",
+                    "name",
+                    "name",
+                    "options",
+                    value_obj! {}
+                ],
+                value_vec![
+                    "size",
+                    1,
+                    "storage",
+                    "int32",
+                    "strings",
+                    ValueVec(prim_ids),
+                    "indices",
+                    value_vec![
+                        "size",
+                        1,
+                        "storage",
+                        "int32",
+                        "arrays",
+                        value_vec![prim_id_indices]
+                    ]
+                ]
             ]]
         ],
         "primitives",
-        primitives
+        ValueVec(primitives)
     ]
     .into()
 }
