@@ -337,19 +337,21 @@ fn prims_to_json(prims: Vec<Prim>) -> Value {
         value_vec![
             "pointattributes",
             value_vec![value_vec![
-                "scope",
-                "public",
-                "type",
-                "numeric",
-                "name",
-                "P",
-                "options",
-                value_obj! {
-                    "type";value_obj!{
-                        "type";"string",
-                        "value";"point"
+                value_vec![
+                    "scope",
+                    "public",
+                    "type",
+                    "numeric",
+                    "name",
+                    "P",
+                    "options",
+                    value_obj! {
+                        "type";value_obj!{
+                            "type";"string",
+                            "value";"point"
+                        }
                     }
-                },
+                ],
                 value_vec![
                     "size",
                     3,
