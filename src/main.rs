@@ -1,6 +1,8 @@
+use json::{Value, ValueVec};
 use std::{
     io::{stdin, Read},
     ops::{Add, Div, Mul, Sub},
+    primitive,
 };
 use usvg::{
     tiny_skia_path::{PathSegment, Point},
@@ -102,7 +104,9 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    println!("{:#?}", prims);
+    let json = prims_to_json(prims);
+    let s = json.to_string();
+    println!("{s}");
 
     Ok(())
 }
@@ -243,17 +247,124 @@ struct Prim {
     points: Vec<P>,
 }
 
-// [
-// 	[
-// 		"type","BezierCurve"
-// 	],
-// 	[
-// 		"vertex",[104,105,106,107,108,109,110,111,112,113,114,115],
-// 		"closed",true,
-// 		"basis",[
-// 			"type","Bezier",
-// 			"order",4,
-// 			"knots",[0,0.25,0.5,0.75,1]
-// 		]
-// 	]
-// ],
+pub fn prims_to_json(prims: Vec<Prim>) -> Value {
+    let point_count = prims.iter().fold(0, |acc, prim| acc + prim.points.len());
+    let indices = ValueVec((0..point_count as i64).map(|i| i.into()).collect());
+
+    let points = ValueVec(
+        prims
+            .iter()
+            .flat_map(|prim| prim.points.iter())
+            .map(|p| {
+                Value::from(ValueVec(
+                    [p.0, p.1, 0.0].into_iter().map(Value::from).collect(),
+                ))
+            })
+            .collect(),
+    );
+
+    let mut prim_i = 0;
+    let mut primitives = vec![];
+    for prim in prims.iter() {
+        let value = Value::from(match prim.order {
+            Order::Line => value_vec![
+                value_vec!["type", "PolygonCurve_run"],
+                value_vec![
+                    "startvertex",
+                    prim_i,
+                    "nprimitives",
+                    1,
+                    "nvertices",
+                    value_vec![prim.points.len()]
+                ]
+            ],
+
+            Order::Cube | Order::Quad => {
+                let order = match prim.order {
+                    Order::Line => 2,
+                    Order::Quad => 3,
+                    Order::Cube => 4,
+                };
+                value_vec![
+                    value_vec!["type", "BezierCurve"],
+                    value_vec![
+                        "vertex",
+                        ValueVec(
+                            (prim_i..prim_i + prim.points.len())
+                                .map(Value::from)
+                                .collect()
+                        ),
+                        "closed",
+                        prim.is_closed,
+                        "basis",
+                        value_vec![
+                            "type",
+                            "Bezier",
+                            "order",
+                            4,
+                            "knots",
+                            ValueVec(
+                                (0..prim.points.len() / (order - 1))
+                                    .map(Value::from)
+                                    .collect()
+                            )
+                        ]
+                    ]
+                ]
+            }
+        });
+
+        primitives.push(value);
+        prim_i += prim.points.len();
+    }
+    let primitives = ValueVec(primitives);
+
+    value_vec![
+        "fileversion",
+        "20.5.332",
+        "hasindex",
+        false,
+        "pointcount",
+        point_count,
+        "vertexcount",
+        point_count,
+        "primitivecount",
+        prims.len(),
+        "info",
+        value_obj! {},
+        "topology",
+        value_vec!["pointref", value_vec!["indices", indices]],
+        "attributes",
+        value_vec![
+            "pointattributes",
+            value_vec![value_vec![
+                "scope",
+                "public",
+                "type",
+                "numeric",
+                "name",
+                "P",
+                "options",
+                value_obj! {
+                    "type";value_obj!{
+                        "type";"string",
+                        "value";"point"
+                    }
+                },
+                value_vec![
+                    "size",
+                    3,
+                    "storage",
+                    "fpreal32",
+                    "defaults",
+                    value_vec!["size", 1, "storage", "fpreal64", "values", value_vec![0]],
+                    "values",
+                    value_vec!["size", 3, "storage", "fpreal32", "tuples", points]
+                ]
+            ]]
+        ],
+        "primitives",
+        primitives
+    ]
+    .into()
+}
